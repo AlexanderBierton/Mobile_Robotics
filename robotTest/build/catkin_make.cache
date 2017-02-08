@@ -1,0 +1,2 @@
+plsWork
+-DCATKIN_DEVEL_PREFIX=/home/computing/robotTest/devel -DCMAKE_INSTALL_PREFIX=/home/computing/robotTest/install -G Unix Makefiles
