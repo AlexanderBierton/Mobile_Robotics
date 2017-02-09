@@ -1,0 +1,8 @@
+prefix=/home/computing/robot_vis/devel
+
+Name: robot_vis
+Description: Description of robot_vis
+Version: 0.0.0
+Cflags: 
+Libs: -L/home/computing/robot_vis/devel/lib 
+Requires: 
