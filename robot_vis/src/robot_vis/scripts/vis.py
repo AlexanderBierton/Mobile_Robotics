@@ -1,18 +1,9 @@
-#import rospy
-#from nav_msgs.msg import Odometry
-
-#rospy.init_node('cam_node')
-
-#def callback(data):
-#    print data
-
-#sub = rospy.Subscriber('/turtlebot_2/odom', Odometry, callback=callback)
-#rospy.spin()
-
 import rospy
 import cv2
 import numpy
 from geometry_msgs.msg import Twist
+from std_msgs.msg import String
+from std_msgs.msg import Float32
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 rospy.init_node('image_converter', anonymous=True)
@@ -25,9 +16,10 @@ class image_converter:
         cv2.startWindowThread()
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("/turtlebot_2/camera/rgb/image_raw", Image, self.callback)
+        self.wheel_sub = rospy.Subscriber("/wheel_vel_left", Float32, self.wheelcallback)
 
     def callback(self, data):
-        pub = rospy.Publisher('/turtlebot_1/cmd_vel', Twist)
+        pub = rospy.Publisher('/turtlebot_2/cmd_vel', Twist)
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         except CvBridgeError, e:
@@ -74,9 +66,20 @@ class image_converter:
         #if M['n00'] > 0:
             
         masked = cv2.bitwise_and(cv_image, cv_image, mask = mask)
-        m = numpy.mean(masked)
-        print "this is mean ", m
+        #m = numpy.mean(masked)
+        #print "this is mean ", m
         cv2.imshow("Image window", masked)
+        #meanOut = rospy.Publisher("/colour_output", String)
+        #s = String()
+        #s.data = str(m)
+        #meanOut.publish(s)
+    def wheelcallback(self, whldata):
+        pub = rospy.Publisher('/turtlebot_2/cmd_vel', Twist)
+        print "Yo mama ",whldata
+        u = Twist()
+        pub.publish(u)
+        u.angular.z = whldata
+        
 
 image_converter()
 
