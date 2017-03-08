@@ -15,11 +15,11 @@ class image_converter:
         cv2.namedWindow("Image window", 1)
         cv2.startWindowThread()
         self.bridge = CvBridge()
-        self.image_sub = rospy.Subscriber("/camera/rgb/image_raw", Image, self.callback)
+        self.image_sub = rospy.Subscriber("/turtlebot/camera/rgb/image_raw", Image, self.callback)
        # self.wheel_sub = rospy.Subscriber("/wheel_vel_left", Float32, self.wheelcallback)
 
     def callback(self, data):
-        pub = rospy.Publisher('/cmd_vel', Twist)
+        pub = rospy.Publisher('/turtlebot/cmd_vel', Twist)
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         except CvBridgeError, e:
@@ -40,8 +40,25 @@ class image_converter:
         print numpy.mean(hsv_img[:, :, 1])
         print numpy.mean(hsv_img[:, :, 2])
         
-        lower_yellow = numpy.array([60, 10, 100])
-        upper_yellow = numpy.array([100, 225, 200])
+        #####Yellow
+        lower_yellow = numpy.array([30, 30, 30])
+        upper_yellow = numpy.array([50, 255, 200])
+        #####
+        
+        #####Red
+        lower_red = numpy.array([0, 100, 100])
+        upper_red = numpy.array([0, 255, 255])
+        #####
+        
+        ####Green
+        lower_green = numpy.array([50, 50, 50])
+        upper_green = numpy.array([100, 255, 255])
+        ####
+        
+        ####Blue
+        lower_blue = numpy.array([100, 100, 100])
+        upper_blue = numpy.array([150, 255, 250])
+        ####
         
         bgr_contours, hierachy = cv2.findContours(bgr_thresh.copy(),
                                                   cv2.RETR_TREE,
@@ -55,40 +72,45 @@ class image_converter:
             if a > 100.0:
                 cv2.drawContours(cv_image, c, -1, (255, 0, 0))
         print '===='
-        mask = cv2.inRange(hsv_img, lower_yellow, upper_yellow)
+        yellow_mask = cv2.inRange(hsv_img, lower_yellow, upper_yellow)
+        red_mask = cv2.inRange(hsv_img, lower_red, upper_red)
+        green_mask = cv2.inRange(hsv_img, lower_green, upper_green)
+        blue_mask = cv2.inRange(hsv_img, lower_blue, upper_blue)
+        
+        mask = yellow_mask + red_mask + green_mask + blue_mask        
+        
+        amask = cv2.bitwise_and(cv_image, cv_image, mask = mask)
         
         h, w, d = cv_image.shape        
         search_top = 3*h/4
         search_bot = 3*h/4 + 20
-        mask[0:search_top, 0:w] = 0
-        mask[search_bot:h, 0:w] = 0
+        print "h = ",h
+        print "w = ",w
+        print "d = ",d
+        mask[0:250, 0:w] = 0
+        mask[300:h, 0:w] = 0
         M = cv2.moments(mask)
         if M['m00'] > 0:
             cx = int(M['m10']/M['m00'])
             cy = int(M['m01']/M['m00'])
-            cv2.circle(cv_image, (cx, cy), 20, (0, 0, 255), -1)
+            cv2.circle(cv_image, (cx, cy), 10, (0, 255, 255), -1)
             err = cx - w/2
             t.linear.x = 0.2
             t.angular.z = -float(err) /100
             pub.publish(t)
-        #cv2.imshow("window", cv_image)
-        #cv2.waitkey(3)
+        else:
+            t.linear.x = 0.4
+            #pub.publish(t)
+            print "Nothing Found"
             
         masked = cv2.bitwise_and(cv_image, cv_image, mask = mask)
         m = numpy.mean(masked)
         #print "this is mean ", m
-        cv2.imshow("Image window", cv_image)
+        cv2.imshow("Image window", masked)
         meanOut = rospy.Publisher("/colour_output", String)
         s = String()
         s.data = str(m)
         meanOut.publish(s)
-    #def wheelcallback(self, whldata):
-     #   pub = rospy.Publisher('/turtlebot_2/cmd_vel', Twist)
-      #  print "Yo mama ",whldata
-       # u = Twist()
-        #pub.publish(u)
-        #u.angular.z = whldata
-        #rospy.signal_shutdown('Information Received')
         
 
 image_converter()
