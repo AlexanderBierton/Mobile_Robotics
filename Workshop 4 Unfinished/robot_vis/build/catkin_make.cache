@@ -1,0 +1,2 @@
+robot_vis
+-DCATKIN_DEVEL_PREFIX=/home/computing/robot_vis/devel -DCMAKE_INSTALL_PREFIX=/home/computing/robot_vis/install -G Unix Makefiles
