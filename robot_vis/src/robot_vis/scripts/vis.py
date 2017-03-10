@@ -5,10 +5,12 @@ from geometry_msgs.msg import Twist
 from std_msgs.msg import String
 from std_msgs.msg import Float32
 from sensor_msgs.msg import Image
+from sensor_msgs.msg import LaserScan
 from cv_bridge import CvBridge, CvBridgeError
 rospy.init_node('image_converter', anonymous=True)
 
 class image_converter:
+    
     
     def __init__(self):
 
@@ -16,8 +18,17 @@ class image_converter:
         cv2.startWindowThread()
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("/turtlebot/camera/rgb/image_raw", Image, self.callback)
+        #self.scan_sub = rospy.Subscriber("/turtlebot/scan", LaserScan, self.scan_callback)
        # self.wheel_sub = rospy.Subscriber("/wheel_vel_left", Float32, self.wheelcallback)
 
+
+    colour_list = []
+    
+    col_red = False
+    col_yel = False
+    col_gre = False
+    col_blu = False
+    
     def callback(self, data):
         pub = rospy.Publisher('/turtlebot/cmd_vel', Twist)
         try:
@@ -25,6 +36,15 @@ class image_converter:
         except CvBridgeError, e:
             print e
         t = Twist()
+        l = LaserScan
+        
+        global colour_list
+        
+        global col_red
+        global col_yel
+        global col_gre
+        global col_blu
+        
         #t.angular.z = 1.0
         #pub.publish(t)
         bgr_thresh = cv2.inRange(cv_image,
@@ -36,9 +56,9 @@ class image_converter:
                                  numpy.array((90, 150, 0)),
                                  numpy.array((180, 250, 250)))
 
-        print numpy.mean(hsv_img[:, :, 0])
-        print numpy.mean(hsv_img[:, :, 1])
-        print numpy.mean(hsv_img[:, :, 2])
+        #print numpy.mean(hsv_img[:, :, 0])
+        #print numpy.mean(hsv_img[:, :, 1])
+        #print numpy.mean(hsv_img[:, :, 2])
         
         #####Yellow
         lower_yellow = numpy.array([30, 30, 30])
@@ -84,9 +104,9 @@ class image_converter:
         h, w, d = cv_image.shape        
         search_top = 3*h/4
         search_bot = 3*h/4 + 20
-        print "h = ",h
-        print "w = ",w
-        print "d = ",d
+        #print "h = ",h
+        #print "w = ",w
+        #print "d = ",d
         mask[0:250, 0:w] = 0
         mask[300:h, 0:w] = 0
         M = cv2.moments(mask)
@@ -98,6 +118,7 @@ class image_converter:
             t.linear.x = 0.2
             t.angular.z = -float(err) /100
             pub.publish(t)
+                        
         else:
             t.linear.x = 0.4
             #pub.publish(t)
@@ -106,6 +127,60 @@ class image_converter:
         masked = cv2.bitwise_and(cv_image, cv_image, mask = mask)
         m = numpy.mean(masked)
         #print "this is mean ", m
+        
+        av_per_row = numpy.average(amask, axis=0)
+        av_col = numpy.average(av_per_row, axis=0)
+        #print av_col
+        
+        
+        
+        col_arr = numpy.array(av_col) 
+        print col_arr
+        
+        if col_arr[2] > col_arr[0] and col_arr[2] > col_arr[1] and numpy.round(col_arr[2]) != numpy.round(col_arr[1]):
+            print "Red"
+            
+            if self.col_red != True:
+                self.colour_list.append("Red")                
+            
+            self.col_red = True
+            
+            
+            
+        if col_arr[2] > col_arr[0] and col_arr[1] > col_arr[0] and numpy.round(col_arr[1]) == numpy.round(col_arr[2]):
+            print "Yellow"
+            #colour_list.append("Yellow")
+            if self.col_yel != True:
+                self.colour_list.append("Yellow")                
+            
+            self.col_yel = True
+            
+            
+            
+        if col_arr[1] > col_arr[0] and col_arr[1] > col_arr[2] and numpy.round(col_arr[1]) != numpy.round(col_arr[2]):
+            print "Green"
+            #colour_list.append("Green")
+
+            if self.col_gre != True:
+                self.colour_list.append("Green")                
+            
+            self.col_gre = True            
+            
+            
+            
+        if col_arr[0] > col_arr[1] and col_arr[0] > col_arr[2]:
+            print "Blue"
+            #colour_list.append("Blue")
+
+            if self.col_blu != True:
+                self.colour_list.append("Blue")                
+            
+            self.col_blu = True            
+            
+            
+        
+        av_col = 0
+        print self.colour_list
         cv2.imshow("Image window", masked)
         meanOut = rospy.Publisher("/colour_output", String)
         s = String()
