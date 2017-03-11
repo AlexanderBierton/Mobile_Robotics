@@ -18,8 +18,8 @@ class image_converter:
         cv2.startWindowThread()
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("/turtlebot/camera/rgb/image_raw", Image, self.callback)
-        #self.scan_sub = rospy.Subscriber("/turtlebot/scan", LaserScan, self.scan_callback)
-       # self.wheel_sub = rospy.Subscriber("/wheel_vel_left", Float32, self.wheelcallback)
+        self.scan_sub = rospy.Subscriber("/turtlebot/scan", LaserScan, self.scan_callback)
+        #self.wheel_sub = rospy.Subscriber("/wheel_vel_left", Float32, self.wheelcallback)
 
 
     colour_list = []
@@ -38,6 +38,7 @@ class image_converter:
         t = Twist()
         l = LaserScan
         
+        ##global variables
         global colour_list
         
         global col_red
@@ -92,13 +93,28 @@ class image_converter:
             if a > 100.0:
                 cv2.drawContours(cv_image, c, -1, (255, 0, 0))
         print '===='
+        
+        ##All colour masks for rgb Camera
         yellow_mask = cv2.inRange(hsv_img, lower_yellow, upper_yellow)
         red_mask = cv2.inRange(hsv_img, lower_red, upper_red)
         green_mask = cv2.inRange(hsv_img, lower_green, upper_green)
         blue_mask = cv2.inRange(hsv_img, lower_blue, upper_blue)
         
-        mask = yellow_mask + red_mask + green_mask + blue_mask        
+        ##mask which implements all colours masks
+        mask = yellow_mask + red_mask + green_mask + blue_mask     
+
+        ##Remove found colours when destination has been reached        
         
+        #for colours in self.colour_list:
+            #if (colours == "Red"):
+                #mask = mask - red_mask
+            #if (colours == "Yellow"):
+                #mask = mask - yellow_mask
+            #if (colours == "Green"):
+                #mask = mask - green_mask
+            #if (colours == "Blue"):
+                #mask = mask - blue_mask
+        ##Average Colour filtering mask
         amask = cv2.bitwise_and(cv_image, cv_image, mask = mask)
         
         h, w, d = cv_image.shape        
@@ -117,7 +133,7 @@ class image_converter:
             err = cx - w/2
             t.linear.x = 0.2
             t.angular.z = -float(err) /100
-            pub.publish(t)
+            #pub.publish(t)
                         
         else:
             t.linear.x = 0.4
@@ -147,7 +163,7 @@ class image_converter:
             
             
             
-        if col_arr[2] > col_arr[0] and col_arr[1] > col_arr[0] and numpy.round(col_arr[1]) == numpy.round(col_arr[2]):
+        elif col_arr[2] > col_arr[0] and col_arr[1] > col_arr[0] and numpy.round(col_arr[1]) == numpy.round(col_arr[2]):
             print "Yellow"
             #colour_list.append("Yellow")
             if self.col_yel != True:
@@ -157,7 +173,7 @@ class image_converter:
             
             
             
-        if col_arr[1] > col_arr[0] and col_arr[1] > col_arr[2] and numpy.round(col_arr[1]) != numpy.round(col_arr[2]):
+        elif col_arr[1] > col_arr[0] and col_arr[1] > col_arr[2] and numpy.round(col_arr[1]) != numpy.round(col_arr[2]):
             print "Green"
             #colour_list.append("Green")
 
@@ -168,7 +184,7 @@ class image_converter:
             
             
             
-        if col_arr[0] > col_arr[1] and col_arr[0] > col_arr[2]:
+        elif col_arr[0] > col_arr[1] and col_arr[0] > col_arr[2]:
             print "Blue"
             #colour_list.append("Blue")
 
@@ -183,10 +199,26 @@ class image_converter:
         print self.colour_list
         cv2.imshow("Image window", masked)
         meanOut = rospy.Publisher("/colour_output", String)
+        
+        front_laser = rospy.Publisher("/front_scan", LaserScan)
+        ls = LaserScan()
+        ls.header.frame_id = "turtlebot/camera_depth_frame"
+        ls.angle_min = -0.5
+        ls.angle_max = 0.5
+        ls.range_max = 10.0
+        ls.range_min = 4.0
+        ls.range_max = 6.0
+        front_laser.publish(ls)
+        
+        
         s = String()
         s.data = str(m)
         meanOut.publish(s)
         
+    def scan_callback(self, data):
+        l = LaserScan()
+        avg = numpy.average(data.ranges)
+        print "Average === ", avg
 
 image_converter()
 
