@@ -11,6 +11,16 @@ rospy.init_node('image_converter', anonymous=True)
 
 class image_converter:
     
+    colour_list = []
+    
+    col_red = False
+    col_yel = False
+    col_gre = False
+    col_blu = False
+    
+    colour_reached = False
+    av_col = 0
+    col_arr = 0
     
     def __init__(self):
 
@@ -22,12 +32,7 @@ class image_converter:
         #self.wheel_sub = rospy.Subscriber("/wheel_vel_left", Float32, self.wheelcallback)
 
 
-    colour_list = []
     
-    col_red = False
-    col_yel = False
-    col_gre = False
-    col_blu = False
     
     def callback(self, data):
         pub = rospy.Publisher('/turtlebot/cmd_vel', Twist)
@@ -45,6 +50,10 @@ class image_converter:
         global col_yel
         global col_gre
         global col_blu
+        
+        global colour_reached        
+        global av_col
+        global col_arr
         
         #t.angular.z = 1.0
         #pub.publish(t)
@@ -105,21 +114,22 @@ class image_converter:
 
         ##Remove found colours when destination has been reached        
         
-        #for colours in self.colour_list:
-            #if (colours == "Red"):
-                #mask = mask - red_mask
-            #if (colours == "Yellow"):
-                #mask = mask - yellow_mask
-            #if (colours == "Green"):
-                #mask = mask - green_mask
-            #if (colours == "Blue"):
-                #mask = mask - blue_mask
+        for colours in self.colour_list:
+            if (colours == "Red"):
+                mask = mask - red_mask
+            if (colours == "Yellow"):
+                mask = mask - yellow_mask
+            if (colours == "Green"):
+                mask = mask - green_mask
+            if (colours == "Blue"):
+                mask = mask - blue_mask
         ##Average Colour filtering mask
+        
         amask = cv2.bitwise_and(cv_image, cv_image, mask = mask)
         
         h, w, d = cv_image.shape        
-        search_top = 3*h/4
-        search_bot = 3*h/4 + 20
+        search_top = h/2 - 10
+        search_bot = h/2 + 10
         #print "h = ",h
         #print "w = ",w
         #print "d = ",d
@@ -131,94 +141,81 @@ class image_converter:
             cy = int(M['m01']/M['m00'])
             cv2.circle(cv_image, (cx, cy), 10, (0, 255, 255), -1)
             err = cx - w/2
-            t.linear.x = 0.2
-            t.angular.z = -float(err) /100
-            #pub.publish(t)
+            
+            if self.colour_reached == False:
+                t.linear.x = 0.8
+                t.angular.z = -float(err) /100
+                pub.publish(t)
+            
+            else:
+                self.colour_check()
+                self.colour_reached = False
                         
         else:
-            t.linear.x = 0.4
-            #pub.publish(t)
+            t.angular.z = 0.8
+            pub.publish(t)
             print "Nothing Found"
             
         masked = cv2.bitwise_and(cv_image, cv_image, mask = mask)
         m = numpy.mean(masked)
-        #print "this is mean ", m
         
         av_per_row = numpy.average(amask, axis=0)
         av_col = numpy.average(av_per_row, axis=0)
-        #print av_col
         
+        self.col_arr = numpy.array(av_col) 
+        print self.col_arr
         
-        
-        col_arr = numpy.array(av_col) 
-        print col_arr
-        
-        if col_arr[2] > col_arr[0] and col_arr[2] > col_arr[1] and numpy.round(col_arr[2]) != numpy.round(col_arr[1]):
-            print "Red"
-            
-            if self.col_red != True:
-                self.colour_list.append("Red")                
-            
-            self.col_red = True
-            
-            
-            
-        elif col_arr[2] > col_arr[0] and col_arr[1] > col_arr[0] and numpy.round(col_arr[1]) == numpy.round(col_arr[2]):
-            print "Yellow"
-            #colour_list.append("Yellow")
-            if self.col_yel != True:
-                self.colour_list.append("Yellow")                
-            
-            self.col_yel = True
-            
-            
-            
-        elif col_arr[1] > col_arr[0] and col_arr[1] > col_arr[2] and numpy.round(col_arr[1]) != numpy.round(col_arr[2]):
-            print "Green"
-            #colour_list.append("Green")
-
-            if self.col_gre != True:
-                self.colour_list.append("Green")                
-            
-            self.col_gre = True            
-            
-            
-            
-        elif col_arr[0] > col_arr[1] and col_arr[0] > col_arr[2]:
-            print "Blue"
-            #colour_list.append("Blue")
-
-            if self.col_blu != True:
-                self.colour_list.append("Blue")                
-            
-            self.col_blu = True            
-            
             
         
         av_col = 0
         print self.colour_list
         cv2.imshow("Image window", masked)
         meanOut = rospy.Publisher("/colour_output", String)
-        
-        front_laser = rospy.Publisher("/front_scan", LaserScan)
-        ls = LaserScan()
-        ls.header.frame_id = "turtlebot/camera_depth_frame"
-        ls.angle_min = -0.5
-        ls.angle_max = 0.5
-        ls.range_max = 10.0
-        ls.range_min = 4.0
-        ls.range_max = 6.0
-        front_laser.publish(ls)
-        
-        
+                
         s = String()
         s.data = str(m)
         meanOut.publish(s)
         
+        
+        
+    def colour_check(self):
+        global col_arr
+        if self.col_arr[2] > self.col_arr[0] and self.col_arr[2] > self.col_arr[1] and numpy.round(self.col_arr[2]) != numpy.round(self.col_arr[1]):
+            print "Red"
+            if self.col_red != True:
+                self.colour_list.append("Red")                
+            self.col_red = True
+            
+        elif self.col_arr[2] > self.col_arr[0] and self.col_arr[1] > self.col_arr[0] and numpy.round(self.col_arr[1]) == numpy.round(self.col_arr[2]):
+            print "Yellow"
+            if self.col_yel != True:
+                self.colour_list.append("Yellow")                
+            self.col_yel = True
+            
+        elif self.col_arr[1] > self.col_arr[0] and self.col_arr[1] > self.col_arr[2] and numpy.round(self.col_arr[1]) != numpy.round(self.col_arr[2]):
+            print "Green"
+            if self.col_gre != True:
+                self.colour_list.append("Green")                
+            self.col_gre = True            
+            
+        elif self.col_arr[0] > self.col_arr[1] and self.col_arr[0] > self.col_arr[2]:
+            print "Blue"
+            if self.col_blu != True:
+                self.colour_list.append("Blue")                
+            self.col_blu = True
+        
+        
+        
+        
     def scan_callback(self, data):
-        l = LaserScan()
-        avg = numpy.average(data.ranges)
-        print "Average === ", avg
+        global colour_reached
+        range_ahead = data.ranges[len(data.ranges)/2]
+        print "range ahead = %0.1f" % range_ahead
+        if range_ahead < 0.9:
+            self.colour_reached = True
+        
+    
+    
 
 image_converter()
 
