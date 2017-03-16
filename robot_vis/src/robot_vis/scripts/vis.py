@@ -23,13 +23,11 @@ class image_converter:
     col_arr = 0
     
     def __init__(self):
-
         cv2.namedWindow("Image window", 1)
         cv2.startWindowThread()
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("/turtlebot/camera/rgb/image_raw", Image, self.callback)
         self.scan_sub = rospy.Subscriber("/turtlebot/scan", LaserScan, self.scan_callback)
-        #self.wheel_sub = rospy.Subscriber("/wheel_vel_left", Float32, self.wheelcallback)
 
 
     
@@ -40,23 +38,20 @@ class image_converter:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         except CvBridgeError, e:
             print e
+        
+        
         t = Twist()
-        l = LaserScan
         
         ##global variables
         global colour_list
-        
         global col_red
         global col_yel
         global col_gre
         global col_blu
-        
         global colour_reached        
         global av_col
         global col_arr
         
-        #t.angular.z = 1.0
-        #pub.publish(t)
         bgr_thresh = cv2.inRange(cv_image,
                                  numpy.array((200, 230, 230)),
                                  numpy.array((255, 255, 255)))
@@ -65,10 +60,6 @@ class image_converter:
         hsv_thresh = cv2.inRange(hsv_img,
                                  numpy.array((90, 150, 0)),
                                  numpy.array((180, 250, 250)))
-
-        #print numpy.mean(hsv_img[:, :, 0])
-        #print numpy.mean(hsv_img[:, :, 1])
-        #print numpy.mean(hsv_img[:, :, 2])
         
         #####Yellow
         lower_yellow = numpy.array([30, 30, 30])
@@ -103,17 +94,16 @@ class image_converter:
                 cv2.drawContours(cv_image, c, -1, (255, 0, 0))
         print '===='
         
-        ##All colour masks for rgb Camera
+        ##All colour masks for rgb Camera#
         yellow_mask = cv2.inRange(hsv_img, lower_yellow, upper_yellow)
         red_mask = cv2.inRange(hsv_img, lower_red, upper_red)
         green_mask = cv2.inRange(hsv_img, lower_green, upper_green)
         blue_mask = cv2.inRange(hsv_img, lower_blue, upper_blue)
         
-        ##mask which implements all colours masks
+        ##mask which implements all colours masks#
         mask = yellow_mask + red_mask + green_mask + blue_mask     
-
-        ##Remove found colours when destination has been reached        
         
+        #Remove found colours when destination has been reached#       
         for colours in self.colour_list:
             if (colours == "Red"):
                 mask = mask - red_mask
@@ -123,63 +113,61 @@ class image_converter:
                 mask = mask - green_mask
             if (colours == "Blue"):
                 mask = mask - blue_mask
-        ##Average Colour filtering mask
         
-        amask = cv2.bitwise_and(cv_image, cv_image, mask = mask)
-        
+        #values for height, width and depth of image#
         h, w, d = cv_image.shape        
         search_top = h/2 - 10
         search_bot = h/2 + 10
-        #print "h = ",h
-        #print "w = ",w
-        #print "d = ",d
+        print "width = ", w
+        
+        #Mask borders for isolated detection#
         mask[0:250, 0:w] = 0
         mask[300:h, 0:w] = 0
+        mask[0:h, 350:w] = 0
+        mask[0:h, 0:250] = 0
+        
         M = cv2.moments(mask)
         if M['m00'] > 0:
             cx = int(M['m10']/M['m00'])
             cy = int(M['m01']/M['m00'])
             cv2.circle(cv_image, (cx, cy), 10, (0, 255, 255), -1)
             err = cx - w/2
-            
             if self.colour_reached == False:
-                t.linear.x = 0.8
+                t.linear.x = 0.6
                 t.angular.z = -float(err) /100
-                pub.publish(t)
-            
+                pub.publish(t)            
             else:
-                self.colour_check()
-                self.colour_reached = False
-                        
+                print "m00 ================== ", M['m00']
+                if M['m00'] > 140000 and M['m00'] > 850000:
+                    self.colour_check()
+                self.colour_reached = False 
         else:
             t.angular.z = 0.8
             pub.publish(t)
             print "Nothing Found"
             
+        #masked image showing robotic thinking and for colour detection#
         masked = cv2.bitwise_and(cv_image, cv_image, mask = mask)
-        m = numpy.mean(masked)
+        amask = cv2.bitwise_and(cv_image, cv_image, mask = mask)
         
+        #find average values for colours on row and columns#
         av_per_row = numpy.average(amask, axis=0)
         av_col = numpy.average(av_per_row, axis=0)
         
+        #add values to global array and print#
         self.col_arr = numpy.array(av_col) 
         print self.col_arr
         
-            
-        
+        #reset local av_col value print colour list and display image#
         av_col = 0
         print self.colour_list
         cv2.imshow("Image window", masked)
-        meanOut = rospy.Publisher("/colour_output", String)
-                
-        s = String()
-        s.data = str(m)
-        meanOut.publish(s)
-        
-        
-        
+    
+    #called when robot has stopped near a colour#
     def colour_check(self):
+        #Access Global Array#
         global col_arr
+        #if the average is in range of these 
         if self.col_arr[2] > self.col_arr[0] and self.col_arr[2] > self.col_arr[1] and numpy.round(self.col_arr[2]) != numpy.round(self.col_arr[1]):
             print "Red"
             if self.col_red != True:
@@ -203,10 +191,8 @@ class image_converter:
             if self.col_blu != True:
                 self.colour_list.append("Blue")                
             self.col_blu = True
-        
-        
-        
-        
+    
+    #Callback for laserscan to stop robot collision#
     def scan_callback(self, data):
         global colour_reached
         range_ahead = data.ranges[len(data.ranges)/2]
