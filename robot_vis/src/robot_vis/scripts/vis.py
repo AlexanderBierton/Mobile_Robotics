@@ -4,7 +4,7 @@ import numpy
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import Image
-from move_base_msgs.msg import MoveBaseActionFeedback
+from move_base_msgs.msg import MoveBaseActionFeedback, MoveBaseActionResult
 from sensor_msgs.msg import LaserScan
 from actionlib_msgs.msg import GoalID
 from cv_bridge import CvBridge, CvBridgeError
@@ -39,6 +39,7 @@ class image_converter:
         self.nav_res = rospy.Subscriber("turtlebot/move_base/feedback", MoveBaseActionFeedback, self.resultcallback)
         self.nav_pub = rospy.Publisher("/turtlebot/move_base_simple/goal", PoseStamped, queue_size=0)
         self.cncl_pub = rospy.Publisher("/turtlebot/move_base/cancel", GoalID, queue_size=0)
+        self.res_sub = rospy.Subscriber("/turtlebot/move_base/result", MoveBaseActionResult, self.rescallback)
         
 
 
@@ -240,9 +241,13 @@ class image_converter:
     def resultcallback(self, value):
         if value.status.status == 1:
             self.new_position = True
-        elif value.status.status == 4:
+    
+    def rescallback(self, value):
+        if value.status.status == 4:
             self.pos_reached = True
-        elif value.status.status == 3:
+            
+        if value.status.status == 3:
+            print "At Position"
             self.pos_reached = True
             self.pos_val = self.pos_val + 1
             self.new_position = False
