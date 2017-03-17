@@ -4,7 +4,9 @@ import numpy
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import Image
+from move_base_msgs.msg import MoveBaseActionFeedback
 from sensor_msgs.msg import LaserScan
+from actionlib_msgs.msg import GoalID
 from cv_bridge import CvBridge, CvBridgeError
 rospy.init_node('image_converter', anonymous=True)
 
@@ -20,11 +22,13 @@ class image_converter:
     colour_reached = False
     
     new_position = False
-    
+    pos_reached = False
     av_col = 0
     col_arr = 0
     
-    goal_sets = [[1.5, -4], [1, -1.5], [-4, -1.5], [-4, -0.5], [-1, 2], [1, 4]]
+    pos_val = 0
+    
+    goal_sets = [[1, -2], [1, -1.5], [-4, -1.5], [-4, -0.5], [-1, 2], [1, 4]]
     
     def __init__(self):
         cv2.namedWindow("Image window", 1)
@@ -32,19 +36,22 @@ class image_converter:
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("/turtlebot/camera/rgb/image_raw", Image, self.callback)
         self.scan_sub = rospy.Subscriber("/turtlebot/scan", LaserScan, self.scan_callback)
+        self.nav_res = rospy.Subscriber("turtlebot/move_base/feedback", MoveBaseActionFeedback, self.resultcallback)
         self.nav_pub = rospy.Publisher("/turtlebot/move_base_simple/goal", PoseStamped, queue_size=0)
+        self.cncl_pub = rospy.Publisher("/turtlebot/move_base/cancel", GoalID, queue_size=0)
         
 
 
     
     
     def callback(self, data):
-        pub = rospy.Publisher('/turtlebot/cmd_vel', Twist)
+        pub = rospy.Publisher('/turtlebot/cmd_vel', Twist, queue_size=0)
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         except CvBridgeError, e:
             print e
         
+        GI = GoalID()
         
         t = Twist()
         
@@ -98,7 +105,6 @@ class image_converter:
             a = cv2.contourArea(c)
             if a > 100.0:
                 cv2.drawContours(cv_image, c, -1, (255, 0, 0))
-        print '===='
         
         ##All colour masks for rgb Camera#
         yellow_mask = cv2.inRange(hsv_img, lower_yellow, upper_yellow)
@@ -124,7 +130,7 @@ class image_converter:
         h, w, d = cv_image.shape        
         search_top = h/2 - 10
         search_bot = h/2 + 10
-        print "width = ", w
+        #####print "width = ", w
         
         #Mask borders for isolated detection#
         mask[0:250, 0:w] = 0
@@ -139,18 +145,18 @@ class image_converter:
             cv2.circle(cv_image, (cx, cy), 10, (0, 255, 255), -1)
             err = cx - w/2
             if self.colour_reached == False:
+                if self.new_position == True:
+                    self.cncl_pub.publish(GI)
                 t.linear.x = 0.6
                 t.angular.z = -float(err) /100
-                #pub.publish(t)            
+                pub.publish(t)            
             else:
                 print "m00 ================== ", M['m00']
                 if M['m00'] > 140000 and M['m00'] > 850000:
                     self.colour_check()
                 self.colour_reached = False 
-        else:
-            t.angular.z = 0.8
-            pub.publish(t)
-            print "Nothing Found"
+                if self.new_position == True:
+                    self.new_position = False
             
         #masked image showing robotic thinking and for colour detection#
         masked = cv2.bitwise_and(cv_image, cv_image, mask = mask)
@@ -162,15 +168,15 @@ class image_converter:
         
         #add values to global array and print#
         self.col_arr = numpy.array(av_col) 
-        print self.col_arr
+        #####print self.col_arr
         
-        i = 0
+        
         if self.new_position == False:
-            self.positioning(i)
+            self.positioning(self.pos_val)
         
         #reset local av_col value print colour list and display image#
         av_col = 0
-        print self.colour_list
+        #####print self.colour_list
         cv2.imshow("Image window", masked)
     
     #called when robot has stopped near a colour#
@@ -206,11 +212,13 @@ class image_converter:
     def scan_callback(self, data):
         global colour_reached
         range_ahead = data.ranges[len(data.ranges)/2]
-        print "range ahead = %0.1f" % range_ahead
         if range_ahead < 0.9:
             self.colour_reached = True
+            print "Robot Stopped: Range Ahead = %0.1f" % range_ahead
+            
     
     def positioning(self, value):
+        p = PoseStamped()
         i = 0
         set_one = 0
         set_two = 0
@@ -221,7 +229,23 @@ class image_converter:
                 set_two = num
             i = i + 1
         print "Numbers = ", set_one, " and ", set_two
-        self.new_position = True
+        p.header.frame_id = "/map"
+        p.pose.position.x = set_one
+        p.pose.position.y = set_two
+        
+        p.pose.orientation.w = 0.1
+        self.nav_pub.publish(p)
+        
+    
+    def resultcallback(self, value):
+        if value.status.status == 1:
+            self.new_position = True
+        elif value.status.status == 4:
+            self.pos_reached = True
+        elif value.status.status == 3:
+            self.pos_reached = True
+            self.pos_val = self.pos_val + 1
+            self.new_position = False
         
            
                 
