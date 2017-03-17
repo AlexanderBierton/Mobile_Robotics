@@ -2,8 +2,7 @@ import rospy
 import cv2
 import numpy
 from geometry_msgs.msg import Twist
-from std_msgs.msg import String
-from std_msgs.msg import Float32
+from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import LaserScan
 from cv_bridge import CvBridge, CvBridgeError
@@ -19,8 +18,13 @@ class image_converter:
     col_blu = False
     
     colour_reached = False
+    
+    new_position = False
+    
     av_col = 0
     col_arr = 0
+    
+    goal_sets = [[1.5, -4], [1, -1.5], [-4, -1.5], [-4, -0.5], [-1, 2], [1, 4]]
     
     def __init__(self):
         cv2.namedWindow("Image window", 1)
@@ -28,6 +32,8 @@ class image_converter:
         self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("/turtlebot/camera/rgb/image_raw", Image, self.callback)
         self.scan_sub = rospy.Subscriber("/turtlebot/scan", LaserScan, self.scan_callback)
+        self.nav_pub = rospy.Publisher("/turtlebot/move_base_simple/goal", PoseStamped, queue_size=0)
+        
 
 
     
@@ -135,7 +141,7 @@ class image_converter:
             if self.colour_reached == False:
                 t.linear.x = 0.6
                 t.angular.z = -float(err) /100
-                pub.publish(t)            
+                #pub.publish(t)            
             else:
                 print "m00 ================== ", M['m00']
                 if M['m00'] > 140000 and M['m00'] > 850000:
@@ -157,6 +163,10 @@ class image_converter:
         #add values to global array and print#
         self.col_arr = numpy.array(av_col) 
         print self.col_arr
+        
+        i = 0
+        if self.new_position == False:
+            self.positioning(i)
         
         #reset local av_col value print colour list and display image#
         av_col = 0
@@ -199,6 +209,22 @@ class image_converter:
         print "range ahead = %0.1f" % range_ahead
         if range_ahead < 0.9:
             self.colour_reached = True
+    
+    def positioning(self, value):
+        i = 0
+        set_one = 0
+        set_two = 0
+        for num in self.goal_sets[value]:
+            if i == 0:
+                set_one = num
+            else:
+                set_two = num
+            i = i + 1
+        print "Numbers = ", set_one, " and ", set_two
+        self.new_position = True
+        
+           
+                
         
     
     
