@@ -28,7 +28,7 @@ class image_converter:
     
     pos_val = 0
     
-    goal_sets = [[1, -2], [1, -1.5], [-4, -1.5], [-4, -0.5], [-1, 2], [1, 4]]
+    goal_sets = [[2, -4], [2, -1.5], [-4, -1.5], [1, 4]]
     
     def __init__(self):
         cv2.namedWindow("Image window", 1)
@@ -159,8 +159,6 @@ class image_converter:
                 if self.new_position == True:
                     self.new_position = False
           
-        if self.pos_reached == True:
-            
         #masked image showing robotic thinking and for colour detection#
         masked = cv2.bitwise_and(cv_image, cv_image, mask = mask)
         amask = cv2.bitwise_and(cv_image, cv_image, mask = mask)
@@ -255,7 +253,6 @@ class image_converter:
             self.pos_val = self.pos_val + 1
             self.new_position = False
     
-    def spin(self):
         
            
                 
