@@ -134,8 +134,8 @@ class image_converter:
         #####print "width = ", w
         
         #Mask borders for isolated detection#
-        mask[0:250, 0:w] = 0
-        mask[300:h, 0:w] = 0
+        mask[0:300, 0:w] = 0
+        mask[400:h, 0:w] = 0
         mask[0:h, 350:w] = 0
         mask[0:h, 0:250] = 0
         
@@ -158,6 +158,8 @@ class image_converter:
                 self.colour_reached = False 
                 if self.new_position == True:
                     self.new_position = False
+          
+        if self.pos_reached == True:
             
         #masked image showing robotic thinking and for colour detection#
         masked = cv2.bitwise_and(cv_image, cv_image, mask = mask)
@@ -173,6 +175,7 @@ class image_converter:
         
         
         if self.new_position == False:
+            print "New Position"
             self.positioning(self.pos_val)
         
         #reset local av_col value print colour list and display image#
@@ -251,6 +254,8 @@ class image_converter:
             self.pos_reached = True
             self.pos_val = self.pos_val + 1
             self.new_position = False
+    
+    def spin(self):
         
            
                 
