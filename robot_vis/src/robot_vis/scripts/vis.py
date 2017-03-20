@@ -134,7 +134,7 @@ class image_converter:
         #####print "width = ", w
         
         #Mask borders for isolated detection#
-        mask[0:300, 0:w] = 0
+        mask[0:250, 0:w] = 0
         mask[400:h, 0:w] = 0
         mask[0:h, 350:w] = 0
         mask[0:h, 0:250] = 0
@@ -214,7 +214,7 @@ class image_converter:
     def scan_callback(self, data):
         global colour_reached
         range_ahead = data.ranges[len(data.ranges)/2]
-        if range_ahead < 0.9:
+        if range_ahead < 1:
             self.colour_reached = True
             print "Robot Stopped: Range Ahead = %0.1f" % range_ahead
             
@@ -246,6 +246,8 @@ class image_converter:
     def rescallback(self, value):
         if value.status.status == 4:
             self.pos_reached = True
+            self.pos_val = self.pos_val + 1
+            self.new_position = False
             
         if value.status.status == 3:
             print "At Position"
