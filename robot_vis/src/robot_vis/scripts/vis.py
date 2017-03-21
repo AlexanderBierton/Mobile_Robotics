@@ -1,6 +1,7 @@
 import rospy
 import cv2
 import numpy
+import time
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import Image
@@ -21,14 +22,17 @@ class image_converter:
     
     colour_reached = False
     
-    new_position = False
+    new_position = True
     pos_reached = False
+    start_spin = True
+    col_found = False
+    
     av_col = 0
     col_arr = 0
     
     pos_val = 0
-    
-    goal_sets = [[2, -4], [2, -1.5], [-4, -1.5], [1, 4]]
+    now = time.time()
+    goal_sets = [[2, -4], [2, -1.5], [-3.5, 0], [1, 4]]
     
     def __init__(self):
         cv2.namedWindow("Image window", 1)
@@ -134,13 +138,23 @@ class image_converter:
         #####print "width = ", w
         
         #Mask borders for isolated detection#
-        mask[0:250, 0:w] = 0
+        mask[0:269, 0:w] = 0
         mask[400:h, 0:w] = 0
         mask[0:h, 350:w] = 0
-        mask[0:h, 0:250] = 0
+        mask[0:h, 0:300] = 0
+        
+        
         
         M = cv2.moments(mask)
+        
+        if M['m00'] == 0 and self.col_found == True:
+            self.col_found = False
+            self.new_position = False        
+        
         if M['m00'] > 0:
+            self.start_spin = False
+            print "Colour Found"
+            self.col_found = True
             cx = int(M['m10']/M['m00'])
             cy = int(M['m01']/M['m00'])
             cv2.circle(cv_image, (cx, cy), 10, (0, 255, 255), -1)
@@ -171,7 +185,7 @@ class image_converter:
         self.col_arr = numpy.array(av_col) 
         #####print self.col_arr
         
-        
+        print "Bool : ", self.new_position
         if self.new_position == False:
             print "New Position"
             self.positioning(self.pos_val)
@@ -180,6 +194,26 @@ class image_converter:
         av_col = 0
         #####print self.colour_list
         cv2.imshow("Image window", masked)
+        
+        if self.start_spin == False:
+            self.now = time.time()
+        
+        if self.start_spin == True:
+            future = self.now + 7
+                
+            if time.time() < future:
+                M = cv2.moments(mask)
+                t.angular.z = 1
+                pub.publish(t)
+                print M['m00']
+                pass
+            if time.time() >= future:
+                print "new Bool"
+                self.start_spin = False
+                self.new_position = False
+                
+            else:
+                t.angular.z = 0
     
     #called when robot has stopped near a colour#
     def colour_check(self):
@@ -247,20 +281,20 @@ class image_converter:
         if value.status.status == 4:
             self.pos_reached = True
             self.pos_val = self.pos_val + 1
-            self.new_position = False
+            self.start_spin = True
+            print "failed pos : ", self.pos_val
             
         if value.status.status == 3:
             print "At Position"
             self.pos_reached = True
+            if len(self.colour_list) == 4:
+                rospy.signal_shutdown("All colours found")
             self.pos_val = self.pos_val + 1
-            self.new_position = False
-    
-        
-           
-                
+            self.start_spin = True
+            print "value : ", self.pos_val
         
     
-    
+       
 
 image_converter()
 
