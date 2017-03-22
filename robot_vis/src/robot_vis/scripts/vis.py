@@ -26,13 +26,15 @@ class image_converter:
     pos_reached = False
     start_spin = True
     col_found = False
+    turning = False
     
     av_col = 0
     col_arr = 0
-    
+    pos_dist = 0
     pos_val = 0
+    pos_z = 0
     now = time.time()
-    goal_sets = [[2, -4], [2, -1.5], [-3.5, 0], [1, 4]]
+    goal_sets = [[2, -4, -0.1], [2, 0, 0.5], [-4.3, 1.5, 0.1], [1, 4, 0.5]]
     
     def __init__(self):
         cv2.namedWindow("Image window", 1)
@@ -83,22 +85,19 @@ class image_converter:
         """Yellow"""
         lower_yellow = numpy.array([30, 30, 30])
         upper_yellow = numpy.array([50, 255, 200])
-        """"""
-        
+        """   """
         """Red"""
         lower_red = numpy.array([0, 100, 100])
         upper_red = numpy.array([0, 255, 255])
-        """"""
-        
+        """     """
         """Green"""
         lower_green = numpy.array([50, 50, 50])
         upper_green = numpy.array([100, 255, 255])
-        """"""
-        
+        """    """
         """Blue"""
         lower_blue = numpy.array([100, 100, 100])
         upper_blue = numpy.array([150, 255, 250])
-        """"""
+        """    """
         
         bgr_contours, hierachy = cv2.findContours(bgr_thresh.copy(),
                                                   cv2.RETR_TREE,
@@ -192,6 +191,14 @@ class image_converter:
             print "New Position"
             self.positioning(self.pos_val)
         
+        elif self.new_position == True and self.dist >= 4 and self.start_spin == False and self.turning == False:
+            print "MAXIMUM OVERDRIVE"
+            mo = Twist()
+            mo.linear.x = 0.2
+            pub.publish(mo)
+        
+        print self.turning
+        
         #reset local av_col value print colour list and display image#
         av_col = 0
         #####print self.colour_list
@@ -257,21 +264,16 @@ class image_converter:
     
     def positioning(self, value):
         p = PoseStamped()
-        i = 0
-        set_one = 0
-        set_two = 0
-        for num in self.goal_sets[value]:
-            if i == 0:
-                set_one = num
-            else:
-                set_two = num
-            i = i + 1
-        print "Numbers = ", set_one, " and ", set_two
-        p.header.frame_id = "/map"
-        p.pose.position.x = set_one
-        p.pose.position.y = set_two
+        set_x = self.goal_sets[value] [0]
+        set_y = self.goal_sets[value] [1]
+        set_w = self.goal_sets[value] [2]
         
-        p.pose.orientation.w = 0.1
+        print "Numbers = ", set_x, " and ", set_y
+        p.header.frame_id = "/map"
+        p.pose.position.x = set_x
+        p.pose.position.y = set_y
+        
+        p.pose.orientation.w = set_w
         self.nav_pub.publish(p)
         
     
@@ -281,28 +283,43 @@ class image_converter:
     
     def rescallback(self, value):
         if value.status.status == 4:
-            self.pos_reached = True
-            self.pos_val = self.pos_val + 1
-            self.start_spin = True
             print "failed pos : ", self.pos_val
+            if self.pos_val <= len(self.goal_sets):
+                self.pos_val = self.pos_val + 1
+                self.pos_reached = True
+                self.start_spin = True
             
         if value.status.status == 3:
             print "At Position"
-            self.pos_reached = True
-            if len(self.colour_list) == 4:
-                rospy.signal_shutdown("All colours found")
-            self.pos_val = self.pos_val + 1
-            self.start_spin = True
-            print "value : ", self.pos_val
+            if self.pos_val <= len(self.goal_sets):
+                self.pos_reached = True
+                if len(self.colour_list) == 4:
+                    rospy.signal_shutdown("All colours found")
+                self.pos_val = self.pos_val + 1
+                self.start_spin = True
+                print "value : ", self.pos_val
             
     def speed_dist(self, coor):
-        p = PoseWithCovarianceStamped
+        temp = coor.pose.pose.orientation.z
+        if self.pos_z >= temp +- 0.6 or self.pos_z <= temp +- 0.6:
+            self.turning = True
+        else:
+            self.turning = False
+        self.pos_z = coor.pose.pose.orientation.z
         print coor.pose.pose.position.x
         tarx = self.goal_sets [self.pos_val] [0]
         tary = self.goal_sets [self.pos_val] [1]
         
         varx = coor.pose.pose.position.x
         vary = coor.pose.pose.position.y
+        
+        calx = tarx - varx
+        caly = tary - vary
+        
+        square = (calx ** 2) + (caly ** 2)
+        self.dist = numpy.sqrt(square)
+        
+        print "dist = ", self.dist
         
         
         
