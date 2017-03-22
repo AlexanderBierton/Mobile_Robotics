@@ -154,7 +154,6 @@ class image_converter:
         """If the mask variable detects a colour the value will be greater than 0"""
         if M['m00'] > 0:
             self.start_spin = False
-            print "Colour Found"
             self.col_found = True
             cx = int(M['m10']/M['m00'])
             cy = int(M['m01']/M['m00'])
@@ -167,12 +166,17 @@ class image_converter:
                 t.angular.z = -float(err) /100
                 pub.publish(t)            
             else:
-                print "m00 ================== ", M['m00']
+                """       ###          """
                 if M['m00'] > 140000 and M['m00'] > 850000:
                     self.colour_check()
-                self.colour_reached = False 
-                if self.new_position == True:
-                    self.new_position = False
+                if len(self.colour_list) < 4:
+                    self.colour_reached = False 
+                    if self.new_position == True:
+                        self.new_position = False
+        if len(self.colour_list) == 4:
+            print self.colour_list
+            print "All Colours Found!"
+            rospy.signal_shutdown("All colours found")
           
         #masked image showing robotic thinking and for colour detection#
         masked = cv2.bitwise_and(cv_image, cv_image, mask = mask)
@@ -186,7 +190,7 @@ class image_converter:
         self.col_arr = numpy.array(av_col) 
         #####print self.col_arr
         
-        print "Bool : ", self.new_position
+        #print "Bool : ", self.new_position
         if self.new_position == False:
             print "New Position"
             self.positioning(self.pos_val)
@@ -197,7 +201,7 @@ class image_converter:
             mo.linear.x = 0.2
             pub.publish(mo)
         
-        print self.turning
+        #print self.turning
         
         #reset local av_col value print colour list and display image#
         av_col = 0
@@ -214,10 +218,9 @@ class image_converter:
                 M = cv2.moments(mask)
                 t.angular.z = 1
                 pub.publish(t)
-                print M['m00']
                 pass
             if time.time() >= future:
-                print "new Bool"
+                ###
                 self.start_spin = False
                 self.new_position = False
                 
@@ -294,10 +297,15 @@ class image_converter:
             if self.pos_val <= len(self.goal_sets):
                 self.pos_reached = True
                 if len(self.colour_list) == 4:
+                    print self.colour_list
+                    print "All Colours Found!"
                     rospy.signal_shutdown("All colours found")
-                self.pos_val = self.pos_val + 1
-                self.start_spin = True
-                print "value : ", self.pos_val
+                if self.pos_val == 3:
+                     self.start_spin = True
+                if self.pos_val != 3:
+                    self.pos_val = self.pos_val + 1
+                    self.start_spin = True
+                
             
     def speed_dist(self, coor):
         temp = coor.pose.pose.orientation.z
@@ -306,7 +314,6 @@ class image_converter:
         else:
             self.turning = False
         self.pos_z = coor.pose.pose.orientation.z
-        print coor.pose.pose.position.x
         tarx = self.goal_sets [self.pos_val] [0]
         tary = self.goal_sets [self.pos_val] [1]
         
@@ -319,7 +326,7 @@ class image_converter:
         square = (calx ** 2) + (caly ** 2)
         self.dist = numpy.sqrt(square)
         
-        print "dist = ", self.dist
+        #print "dist = ", self.dist
         
         
         
