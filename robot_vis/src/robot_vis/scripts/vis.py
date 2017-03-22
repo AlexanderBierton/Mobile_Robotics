@@ -3,7 +3,7 @@ import cv2
 import numpy
 import time
 from geometry_msgs.msg import Twist
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from sensor_msgs.msg import Image
 from move_base_msgs.msg import MoveBaseActionFeedback, MoveBaseActionResult
 from sensor_msgs.msg import LaserScan
@@ -44,6 +44,7 @@ class image_converter:
         self.nav_pub = rospy.Publisher("/turtlebot/move_base_simple/goal", PoseStamped, queue_size=0)
         self.cncl_pub = rospy.Publisher("/turtlebot/move_base/cancel", GoalID, queue_size=0)
         self.res_sub = rospy.Subscriber("/turtlebot/move_base/result", MoveBaseActionResult, self.rescallback)
+        self.pos_sub = rospy.Subscriber("/turtlebot/amcl_pose", PoseWithCovarianceStamped, self.speed_dist)
         
 
 
@@ -79,25 +80,25 @@ class image_converter:
                                  numpy.array((90, 150, 0)),
                                  numpy.array((180, 250, 250)))
         
-        #####Yellow
+        """Yellow"""
         lower_yellow = numpy.array([30, 30, 30])
         upper_yellow = numpy.array([50, 255, 200])
-        #####
+        """"""
         
-        #####Red
+        """Red"""
         lower_red = numpy.array([0, 100, 100])
         upper_red = numpy.array([0, 255, 255])
-        #####
+        """"""
         
-        ####Green
+        """Green"""
         lower_green = numpy.array([50, 50, 50])
         upper_green = numpy.array([100, 255, 255])
-        ####
+        """"""
         
-        ####Blue
+        """Blue"""
         lower_blue = numpy.array([100, 100, 100])
         upper_blue = numpy.array([150, 255, 250])
-        ####
+        """"""
         
         bgr_contours, hierachy = cv2.findContours(bgr_thresh.copy(),
                                                   cv2.RETR_TREE,
@@ -111,13 +112,13 @@ class image_converter:
             if a > 100.0:
                 cv2.drawContours(cv_image, c, -1, (255, 0, 0))
         
-        ##All colour masks for rgb Camera#
+        """All colour masks for rgb Camera"""
         yellow_mask = cv2.inRange(hsv_img, lower_yellow, upper_yellow)
         red_mask = cv2.inRange(hsv_img, lower_red, upper_red)
         green_mask = cv2.inRange(hsv_img, lower_green, upper_green)
         blue_mask = cv2.inRange(hsv_img, lower_blue, upper_blue)
         
-        ##mask which implements all colours masks#
+        """mask which implements all colours masks"""
         mask = yellow_mask + red_mask + green_mask + blue_mask     
         
         #Remove found colours when destination has been reached#       
@@ -131,26 +132,27 @@ class image_converter:
             if (colours == "Blue"):
                 mask = mask - blue_mask
         
-        #values for height, width and depth of image#
+        """values for height, width and depth of image"""
         h, w, d = cv_image.shape        
         search_top = h/2 - 10
         search_bot = h/2 + 10
-        #####print "width = ", w
         
-        #Mask borders for isolated detection#
+        """Mask borders for isolated detection"""
         mask[0:269, 0:w] = 0
         mask[400:h, 0:w] = 0
         mask[0:h, 350:w] = 0
         mask[0:h, 0:300] = 0
         
         
-        
+        """var M for getting values of the coloured mask"""
         M = cv2.moments(mask)
         
+        """Used if robot first finds colour and is unable to see it anymore after moving"""
         if M['m00'] == 0 and self.col_found == True:
             self.col_found = False
-            self.new_position = False        
-        
+            self.new_position = False      
+            
+        """If the mask variable detects a colour the value will be greater than 0"""
         if M['m00'] > 0:
             self.start_spin = False
             print "Colour Found"
@@ -292,6 +294,19 @@ class image_converter:
             self.pos_val = self.pos_val + 1
             self.start_spin = True
             print "value : ", self.pos_val
+            
+    def speed_dist(self, coor):
+        p = PoseWithCovarianceStamped
+        print coor.pose.pose.position.x
+        tarx = self.goal_sets [self.pos_val] [0]
+        tary = self.goal_sets [self.pos_val] [1]
+        
+        varx = coor.pose.pose.position.x
+        vary = coor.pose.pose.position.y
+        
+        
+        
+        
         
     
        
