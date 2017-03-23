@@ -139,7 +139,7 @@ class image_converter:
         """Mask borders for isolated detection"""
         mask[0:269, 0:w] = 0
         mask[400:h, 0:w] = 0
-        mask[0:h, 350:w] = 0
+        mask[0:h, 400:w] = 0
         mask[0:h, 0:300] = 0
         
         
