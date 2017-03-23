@@ -3,7 +3,7 @@ import cv2
 import numpy
 import time
 from geometry_msgs.msg import Twist
-from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import Image
 from move_base_msgs.msg import MoveBaseActionFeedback, MoveBaseActionResult
 from sensor_msgs.msg import LaserScan
@@ -14,7 +14,7 @@ rospy.init_node('image_converter', anonymous=True)
 class image_converter:
     
     colour_list = []
-    
+    """Booleans to see if tis found colours or not"""
     col_red = False
     col_yel = False
     col_gre = False
@@ -22,15 +22,17 @@ class image_converter:
     
     colour_reached = False
     
+    ranNun = 0
+    """Booleans to find out if robot has made it to a destination or not"""
     new_position = True
     pos_reached = False
     start_spin = True
     col_found = False
-    turning = False
-    
+    stop_search = False
+    """Variables for use of functions"""
     av_col = 0
     col_arr = 0
-    pos_dist = 0
+    pos_dist = 0   
     pos_val = 0
     pos_z = 0
     now = time.time()
@@ -46,7 +48,6 @@ class image_converter:
         self.nav_pub = rospy.Publisher("/turtlebot/move_base_simple/goal", PoseStamped, queue_size=0)
         self.cncl_pub = rospy.Publisher("/turtlebot/move_base/cancel", GoalID, queue_size=0)
         self.res_sub = rospy.Subscriber("/turtlebot/move_base/result", MoveBaseActionResult, self.rescallback)
-        self.pos_sub = rospy.Subscriber("/turtlebot/amcl_pose", PoseWithCovarianceStamped, self.speed_dist)
         
 
 
@@ -133,8 +134,7 @@ class image_converter:
         
         """values for height, width and depth of image"""
         h, w, d = cv_image.shape        
-        search_top = h/2 - 10
-        search_bot = h/2 + 10
+
         
         """Mask borders for isolated detection"""
         mask[0:269, 0:w] = 0
@@ -152,68 +152,67 @@ class image_converter:
             self.new_position = False      
             
         """If the mask variable detects a colour the value will be greater than 0"""
-        if M['m00'] > 0:
-            self.start_spin = False
-            self.col_found = True
-            cx = int(M['m10']/M['m00'])
-            cy = int(M['m01']/M['m00'])
-            cv2.circle(cv_image, (cx, cy), 10, (0, 255, 255), -1)
-            err = cx - w/2
-            if self.colour_reached == False:
-                if self.new_position == True:
-                    self.cncl_pub.publish(GI)
-                t.linear.x = 0.6
-                t.angular.z = -float(err) /100
-                pub.publish(t)            
-            else:
-                """       ###          """
-                if M['m00'] > 140000 and M['m00'] > 850000:
-                    self.colour_check()
-                if len(self.colour_list) < 4:
-                    self.colour_reached = False 
+        if self.stop_search == False:   
+            if M['m00'] > 0:
+                self.start_spin = False
+                self.col_found = True
+                cx = int(M['m10']/M['m00'])
+                cy = int(M['m01']/M['m00'])
+                cv2.circle(cv_image, (cx, cy), 10, (0, 255, 255), -1)
+                err = cx - w/2
+                if self.colour_reached == False:
                     if self.new_position == True:
-                        self.new_position = False
+                        self.cncl_pub.publish(GI)
+                    t.linear.x = 0.6
+                    t.angular.z = -float(err) /100
+                    pub.publish(t)            
+                else:
+                    """       ###          """
+                    if M['m00'] > 140000 and M['m00'] > 850000:
+                        self.colour_check()
+                    if len(self.colour_list) < 4:
+                        self.colour_reached = False 
+                        if self.new_position == True:
+                            self.new_position = False
+        """Detect if all colours are found"""                    
         if len(self.colour_list) == 4:
             print self.colour_list
             print "All Colours Found!"
             rospy.signal_shutdown("All colours found")
           
-        #masked image showing robotic thinking and for colour detection#
+        """masked image showing robotic thinking and for colour detection"""
         masked = cv2.bitwise_and(cv_image, cv_image, mask = mask)
         amask = cv2.bitwise_and(cv_image, cv_image, mask = mask)
         
-        #find average values for colours on row and columns#
+        """find average values for colours on row and columns"""
         av_per_row = numpy.average(amask, axis=0)
         av_col = numpy.average(av_per_row, axis=0)
         
-        #add values to global array and print#
+        """add values to global array and print"""
         self.col_arr = numpy.array(av_col) 
-        #####print self.col_arr
         
-        #print "Bool : ", self.new_position
+        
+        """print "Bool : ", self.new_position"""
         if self.new_position == False:
             print "New Position"
             self.positioning(self.pos_val)
         
-        elif self.new_position == True and self.dist >= 4 and self.start_spin == False and self.turning == False:
-            print "MAXIMUM OVERDRIVE"
-            mo = Twist()
-            mo.linear.x = 0.2
-            pub.publish(mo)
         
-        #print self.turning
-        
-        #reset local av_col value print colour list and display image#
+        """reset local av_col value print colour list and display image"""
         av_col = 0
-        #####print self.colour_list
+
         cv2.imshow("Image window", masked)
         
-        if self.start_spin == False:
-            self.now = time.time()
         
+        if self.start_spin == False and self.col_found == False:
+            self.now = time.time()
+            
+        print self.start_spin, " and ", self.col_found
+        
+        """Spin robot to search"""
         if self.start_spin == True:
-            future = self.now + 7
-                
+            future = self.now + 6
+            print self.now
             if time.time() < future:
                 M = cv2.moments(mask)
                 t.angular.z = 1
@@ -226,12 +225,28 @@ class image_converter:
                 
             else:
                 t.angular.z = 0
+            
+        """Time the robot if it has managed to make it to a colour or if its stuck"""
+        if self.col_found == True:
+            future = self.now + 10
+            print "col timer"
+            print self.now, " and ", future
+            print time.time()
+            if time.time() >= future:
+                self.stop_search = True
+                print "it should stop"
+                if self.ranNun == 0:    
+                    self.new_position = False
+                self.ranNun = self.ranNun + 1
+            
     
-    #called when robot has stopped near a colour#
+    """called when robot has stopped near a colour"""
     def colour_check(self):
-        #Access Global Array#
+        """Access Global Array"""
         global col_arr
-        #if the average is in range of these 
+        
+        """if the average is in range of these bgr values"""
+        
         if self.col_arr[2] > self.col_arr[0] and self.col_arr[2] > self.col_arr[1] and numpy.round(self.col_arr[2]) != numpy.round(self.col_arr[1]):
             print "Red"
             if self.col_red != True:
@@ -256,7 +271,7 @@ class image_converter:
                 self.colour_list.append("Blue")                
             self.col_blu = True
     
-    #Callback for laserscan to stop robot collision#
+    """Callback for laserscan to stop robot collision"""
     def scan_callback(self, data):
         global colour_reached
         range_ahead = data.ranges[len(data.ranges)/2]
@@ -264,7 +279,7 @@ class image_converter:
             self.colour_reached = True
             print "Robot Stopped: Range Ahead = %0.1f" % range_ahead
             
-    
+    """Give the Turtlebot a position to go to"""
     def positioning(self, value):
         p = PoseStamped()
         set_x = self.goal_sets[value] [0]
@@ -279,21 +294,18 @@ class image_converter:
         p.pose.orientation.w = set_w
         self.nav_pub.publish(p)
         
-    
+    """Callback for if the robot has retrieved the move_base_simple/goal"""
     def resultcallback(self, value):
         if value.status.status == 1:
             self.new_position = True
     
+    """Callback for if the robot has been able to reach the location or not"""
     def rescallback(self, value):
+        """If the Robot hasn't reached its destination"""
         if value.status.status == 4:
+            self.col_found = False
+            self.stop_search = False
             print "failed pos : ", self.pos_val
-            if self.pos_val <= len(self.goal_sets):
-                self.pos_val = self.pos_val + 1
-                self.pos_reached = True
-                self.start_spin = True
-            
-        if value.status.status == 3:
-            print "At Position"
             if self.pos_val <= len(self.goal_sets):
                 self.pos_reached = True
                 if len(self.colour_list) == 4:
@@ -305,28 +317,24 @@ class image_converter:
                 if self.pos_val != 3:
                     self.pos_val = self.pos_val + 1
                     self.start_spin = True
-                
-            
-    def speed_dist(self, coor):
-        temp = coor.pose.pose.orientation.z
-        if self.pos_z >= temp +- 0.6 or self.pos_z <= temp +- 0.6:
-            self.turning = True
-        else:
-            self.turning = False
-        self.pos_z = coor.pose.pose.orientation.z
-        tarx = self.goal_sets [self.pos_val] [0]
-        tary = self.goal_sets [self.pos_val] [1]
-        
-        varx = coor.pose.pose.position.x
-        vary = coor.pose.pose.position.y
-        
-        calx = tarx - varx
-        caly = tary - vary
-        
-        square = (calx ** 2) + (caly ** 2)
-        self.dist = numpy.sqrt(square)
-        
-        #print "dist = ", self.dist
+        """If the Robot has successfully """
+        if value.status.status == 3:
+            print "At Position"
+            self.col_found = False
+            self.stop_search = False
+            self.ranNun = 0
+            if self.pos_val <= len(self.goal_sets):
+                self.pos_reached = True
+                if len(self.colour_list) == 4:
+                    print self.colour_list
+                    print "All Colours Found!"
+                    rospy.signal_shutdown("All colours found")
+                if self.pos_val == 3:
+                     self.start_spin = True
+                if self.pos_val != 3:
+                    self.pos_val = self.pos_val + 1
+                    self.start_spin = True
+
         
         
         
